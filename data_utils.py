@@ -679,20 +679,25 @@ def process_ace_file(path):
     # idx2graph eg {sample_id: adjacency matrix}
     idx2gragh = pickle.load(fin)
     fin.close()
-    for old_key in list(idx2gragh.keys()):
-    # 确保键的值是以旧格式的路径为开头
-    if old_key.startswith("datasets/ace-cased\\train\\"):
-        # 构建新格式的路径字符串
-        new_key = "/content/drive/MyDrive/ACE2005/ace-cased/train/" + old_key.split("\\")[-1]
-    if old_key.startswith("datasets/ace-cased\\test\\"):
-        # 构建新格式的路径字符串
-        new_key = "/content/drive/MyDrive/ACE2005/ace-cased/test/" + old_key.split("\\")[-1]
-    if old_key.startswith("datasets/ace-cased\\dev\\"):
-        # 构建新格式的路径字符串
-        new_key = "/content/drive/MyDrive/ACE2005/ace-cased/dev/" + old_key.split("\\")[-1]
+    for old_tuple_key in list(idx2gragh.keys()):
+        # 确保键的值是以旧格式的路径为开头
+        temp_filename = old_tuple_key[0]
+        temp_num = old_tuple_key[1]
+        new_key = ""
+        if temp_filename.startswith("datasets/ace-cased\\train\\"):
+            # 构建新格式的路径字符串
+            new_key = "/content/drive/MyDrive/ACE2005/ace-cased/train/" + temp_filename.split("\\")[-1]
+        if temp_filename.startswith("datasets/ace-cased\\test\\"):
+            # 构建新格式的路径字符串
+            new_key = "/content/drive/MyDrive/ACE2005/ace-cased/test/" + temp_filename.split("\\")[-1]
+        if temp_filename.startswith("datasets/ace-cased\\dev\\"):
+            # 构建新格式的路径字符串
+            new_key = "/content/drive/MyDrive/ACE2005/ace-cased/dev/" + temp_filename.split("\\")[-1]
+    
+        new_tuple_key = (new_key, temp_num)
 
-        # 更新字典中的键值对
-        idx2gragh[new_key] = idx2gragh.pop(old_key)
+    # 更新字典中的键值对
+    idx2gragh[new_tuple_key] = idx2gragh.pop(old_tuple_key)
 
     raw_data = read_ace_file(path)
     data = []
