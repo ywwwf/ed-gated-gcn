@@ -106,7 +106,7 @@ class Instructor:
                 optimizer.zero_grad()
 
                 inputs = {col: sample_batched[col].to(self.opt.device) for col in self.opt.inputs_cols}
-                outputs, gate, kl, _ = self.model(inputs)
+                outputs, gate, kl = self.model(inputs)
                 targets = sample_batched['polarity'].to(self.opt.device)
 
                 # print('| logits', tuple(outputs.shape))
@@ -129,7 +129,7 @@ class Instructor:
                 if global_step % self.opt.log_step == 0:
                     all_targets = torch.cat(all_targets).view(-1).cpu().numpy()
                     all_outputs = torch.cat(all_outputs).view(-1).cpu().numpy()
-                    p, r, f1 = self.prf(all_targets, all_outputs)
+                    p, r, f1 = self.paper_prf(all_targets, all_outputs)
 
                     train_loss = loss_total / n_total
                     print('loss: {:.4f}, {:.4f} {:.4f} {:.4f}'.format(train_loss, p, r, f1))
@@ -148,6 +148,7 @@ class Instructor:
                 state_dict = self.model.state_dict()
             self.model.train()
 
+        torch.save(state_dict, "EDmodels/test.pth")
         return state_dict
 
     def analyze(self, state_dict, data_loader):
@@ -161,19 +162,18 @@ class Instructor:
         with torch.no_grad():
             for i, batch_input in enumerate(data_loader):
                 model_input = {col: batch_input[col].to(self.opt.device) for col in self.opt.inputs_cols}
-                logits, _, _, scores = self.model(model_input)
+                logits, _, scores = self.model(model_input)
                 prediction = torch.argmax(logits, -1).cpu().numpy().tolist()
                 all_prediction += prediction
                 all_tokens += batch_input['token']
                 all_anchor_index += batch_input['anchor_index'].numpy().tolist()
                 all_labels += batch_input['polarity'].numpy().tolist()
-                all_scores += scores.cpu().numpy().tolist()
+                # all_scores += scores.cpu().numpy().tolist()
 
         data = []
-        for tokens, anchor_index, target, predict, scores in zip(all_tokens, all_anchor_index, all_labels,
-                                                                 all_prediction, all_scores):
+        for tokens, anchor_index, target, predict in zip(all_tokens, all_anchor_index, all_labels,
+                                                         all_prediction):
             item = {'token': tokens,
-                    'score': scores,
                     'anchor_index': anchor_index,
                     'target': target,
                     'predict': predict,
@@ -195,11 +195,11 @@ class Instructor:
         trials = 0.0
         trues = 0.0
         for j in range(len(preds)):
-            if preds[j] > 0:
+            if preds[j] != 34:
                 trials += 1
-            if golds[j] > 0:
+            if golds[j] != 34:
                 trues += 1
-            if preds[j] == golds[j] and preds[j] > 0:
+            if preds[j] == golds[j] and preds[j] != 34:
                 correct += 1
 
         p = 0.0
@@ -224,7 +224,7 @@ class Instructor:
             for t_batch, t_sample_batched in enumerate(data_loader):
                 t_inputs = {col: t_sample_batched[col].to(self.opt.device) for col in self.opt.inputs_cols}
                 t_targets = t_sample_batched['polarity'].cpu()
-                t_outputs, _, _, _ = self.model(t_inputs)
+                t_outputs, _, _ = self.model(t_inputs)
                 t_preds = torch.argmax(t_outputs, -1).cpu()
 
                 t_targets_all.append(t_targets)
@@ -233,7 +233,7 @@ class Instructor:
         t_targets_all = torch.cat(t_targets_all, dim=0).numpy()
         t_outputs_all = torch.cat(t_outputs_all, dim=0).numpy()
 
-        p, r, f = self.prf(t_targets_all, t_outputs_all)
+        p, r, f = self.paper_prf(t_targets_all, t_outputs_all)
         return p, r, f
 
     def run(self):
@@ -245,23 +245,24 @@ class Instructor:
         train_data_loader = DataLoader(dataset=self.trainset,
                                        batch_size=self.opt.batch_size,
                                        shuffle=False,
-                                       num_workers=3,
+                                       num_workers=0,
                                        collate_fn=collate_fn)
         test_data_loader = DataLoader(dataset=self.testset,
                                       batch_size=self.opt.batch_size,
                                       shuffle=False,
-                                      num_workers=3,
+                                      num_workers=0,
                                       collate_fn=collate_fn)
         val_data_loader = DataLoader(dataset=self.valset,
                                      batch_size=self.opt.batch_size,
                                      shuffle=False,
-                                     num_workers=3,
+                                     num_workers=0,
                                      collate_fn=collate_fn)
 
         self._reset_params()
+        print("begin training...")
         best_state_dict = self._train(criterion, optimizer, train_data_loader, val_data_loader, test_data_loader)
 
-        # self.analyze(best_state_dict, test_data_loader)
+        self.analyze(best_state_dict, test_data_loader)
 
 
 def main():
@@ -284,26 +285,26 @@ def main():
     # Hyper Parameters
     models = list(model_classes.keys())
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', default='bert_ed', choices=models, type=str)
-    parser.add_argument('--dataset', default='litbank-cased',
-                        choices=['ace34-cased', 'ace34-uncased', 'litbank-cased', 'litbank-uncased', 'ace2-uncased',
+    parser.add_argument('--model', default='bert_amir5', choices=models, type=str)
+    parser.add_argument('--dataset', default='ace-cased',
+                        choices=['ace34-cased', 'ace-cased', 'litbank-cased', 'litbank-uncased', 'ace2-uncased',
                                  'ace-cased', 'debug'], type=str)
     parser.add_argument('--optimizer', default='adam', type=str)
     parser.add_argument('--initializer', default='xavier_uniform_', type=str)
     parser.add_argument('--learning_rate', default=0.0001, type=float, help='try 5e-5, 2e-5 for BERT, 1e-3 for others')
     parser.add_argument('--dropout', default=0.25, type=float)
     parser.add_argument('--l2reg', default=0.01, type=float)
-    parser.add_argument('--num_epoch', default=30, type=int, help='try larger number for non-BERT models')
-    parser.add_argument('--batch_size', default=256, type=int, help='try 16, 32, 64 for BERT models')
+    parser.add_argument('--num_epoch', default=1, type=int, help='try larger number for non-BERT models')
+    parser.add_argument('--batch_size', default=16, type=int, help='try 16, 32, 64 for BERT models')
     parser.add_argument('--log_step', default=200, type=int)
     parser.add_argument('--embed_dim', default=300, type=int)
-    parser.add_argument('--gate_w', default=0.01, type=float)
-    parser.add_argument('--kl_w', default=0.01, type=float)
+    parser.add_argument('--gate_w', default=0.1, type=float)
+    parser.add_argument('--kl_w', default=0.2, type=float)
     parser.add_argument('--n_layer', default=4, type=int)
-    parser.add_argument('--hidden_dim', default=256, type=int)
+    parser.add_argument('--hidden_dim', default=128, type=int)
     parser.add_argument('--bert_dim', default=768, type=int)
     parser.add_argument('--hops', default=3, type=int)
-    parser.add_argument('--device', default=None, type=str, help='e.g. cuda:0')
+    parser.add_argument('--device', default="cuda:0", type=str, help='e.g. cuda:0')
     parser.add_argument('--seed', default=14181, type=int, help='set seed for reproducibility')
     parser.add_argument('--class_weight', default=1, type=float, help='Class weighting')
     # The following parameters are only valid for the lcf-bert model
@@ -318,13 +319,14 @@ def main():
         torch.manual_seed(opt.seed)
         torch.cuda.manual_seed(opt.seed)
         torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.enable = True
 
     dataset_files = {
         'litbank-cased': LITBANK_CASE,
         'litbank-uncased': LITBANK_UNCASE,
         'ace34-cased': ACE34_CASE,
-        'ace34-uncased': ACE34_UNCASE,
+        'ace-cased': ACE34_UNCASE,
         'ace2-uncased': ACE2_UNCASE,
         'ace-cased': ACE_CASE,
         'debug': DEBUG
@@ -457,8 +459,10 @@ def main():
     print('--------------------')
 
     ins = Instructor(opt)
+    print("Instructor has been constructed!")
     ins.run()
 
 
 if __name__ == '__main__':
     main()
+
