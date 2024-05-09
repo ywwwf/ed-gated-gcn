@@ -3,12 +3,12 @@ import os
 import random
 import numpy
 import pickle
-from data_utils import read_litbank_file, read_ace34_file, read_ace2_file
+from data_utils import read_litbank_file, read_ace34_file, read_ace2_file, read_ace_file
 import tqdm
 import multiprocessing
 from constant import *
 
-CORENLP_HOME = '/Users/vietld/tools/stanford-corenlp-full-2018-10-05'
+CORENLP_HOME = 'D:/User_2/Download_of_Edge/stanford-corenlp-full-2018-10-05/stanford-corenlp-full-2018-10-05'
 os.environ['CORENLP_HOME'] = CORENLP_HOME
 
 # We assume that you've downloaded Stanford CoreNLP and defined an environment
@@ -26,9 +26,9 @@ hostname = 'localhost'
 #                                endpoint='http://{}:{}'.format(hostname, 9000))
 
 clients = [corenlp.CoreNLPClient(annotators="tokenize ssplit pos depparse".split(),
-                                 start_server=False,
+                                 start_server=True,
                                  endpoint='http://{}:{}'.format(hostname, port))
-           for port in range(9000, 9010)]
+           for port in range(9000, 9002)]
 properties = {
     'inputFormat': 'text',
     'outputFormat': clients[0].default_output_format,
@@ -50,7 +50,7 @@ def annotate(sentence):
     return doc
 
 
-def gen_graph(tokens):
+def gen_graph(tokens, path):
     print(len(tokens))
     text = ' '.join(tokens)
 
@@ -69,9 +69,10 @@ def gen_graph(tokens):
 
     for edge in tree.edge:
         i = edge.source - 1
+        assert i <= 100, 'More node than original,  check {} in {}'.format(text, path)
         j = edge.target - 1
-        matrix[i][j] = 1
-        matrix[j][i] = 1
+        # matrix[i][j] = 1
+        # matrix[j][i] = 1
     return matrix
 
 
@@ -136,11 +137,11 @@ def gen_ace_wrapper(path):
     data = read_ace_file(path)
     idx_graph = dict()
     for gid, tokens, _, _ in data:
-        g = gen_graph(tokens)
+        g = gen_graph(tokens, path)
         idx_graph[gid] = g
 
-    with open(path + '.graph', 'wb') as f:
-        pickle.dump(idx_graph, f)
+    # with open(path + '.graph', 'wb') as f:
+    #     pickle.dump(idx_graph, f)
     print('Done: ', path)
 
 
@@ -153,7 +154,7 @@ def gen_all(path, fn):
     files += sorted([os.path.join(dev, x) for x in os.listdir(dev) if x.endswith('tsv')])
     files += sorted([os.path.join(test, x) for x in os.listdir(test) if x.endswith('tsv')])
 
-    pool = multiprocessing.Pool(20)
+    pool = multiprocessing.Pool(2)
     pool.map(fn, files)
 
     # for file in files:
@@ -166,25 +167,28 @@ if __name__ == '__main__':
 
     import sys
 
-    dataset = 'gpt3-cased'
+    dataset = 'ace-cased'
 
-    # assert dataset in ['ace-cased', 'ace34-cased', 'ace34-uncased', 'litbank-cased', 'litbank-uncased']
+    # assert datasets in ['ace-cased', 'ace34-cased', 'ace-cased', 'litbank-cased', 'litbank-uncased']
 
 
 
-    # if dataset.startswith('ace34'):
+    # if datasets.startswith('ace34'):
     #     print('Gen graph for ACE34: ')
-    #     gen_all(path='datasets/{}'.format(dataset), fn=gen_ace34_wrapper)
-    # elif dataset.startswith('litbank'):
+    #     gen_all(path='datasets/{}'.format(datasets), fn=gen_ace34_wrapper)
+    # elif datasets.startswith('litbank'):
     #     print('Gen graph for LITBANK: ')
-    #     gen_all(path='datasets/{}'.format(dataset), fn=gen_litbank_wrapper)
-    # elif dataset.startswith('ace-'):
+    #     gen_all(path='datasets/{}'.format(datasets), fn=gen_litbank_wrapper)
+    # elif datasets.startswith('ace-'):
     #     print('Gen graph for ACE: ')
-    #     gen_all(path='datasets/{}'.format(dataset), fn=gen_ace_wrapper)
-    # elif dataset.startswith('gpt3'):
+    #     gen_all(path='datasets/{}'.format(datasets), fn=gen_ace_wrapper)
+    # elif datasets.startswith('gpt3'):
     #     print('Gen graph for GPT3: ')
-    #     gen_all(path='datasets/{}'.format(dataset), fn=gen_litbank_wrapper)
-
-    for i in range(14):
-        gen_litbank_wrapper('datasets/litbank-cased/train/gpt-{}.tsv'.format(i))
+    #     gen_all(path='datasets/{}'.format(datasets), fn=gen_litbank_wrapper)
+    gen_all(path='datasets/{}'.format(dataset), fn=gen_ace_wrapper)
+    # gen_ace_wrapper("datasets/ace-cased/train/fsh_29187.tsv")
+    # doc = gen_graph(['We', "'re", 'talking', 'about', 'possibilities', 'of', 'full', 'scale', 'war', 'with', 'former', 'Congressman', 'Tom', 'Andrews', ',', 'Democrat', 'of', 'Maine', '.'])
+    # print(doc)
+    # for i in range(14):
+    #     gen_litbank_wrapper('datasets/litbank-cased/train/gpt-{}.tsv'.format(i))
 
