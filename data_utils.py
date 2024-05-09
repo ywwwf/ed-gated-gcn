@@ -2,7 +2,7 @@
 # file: data_utils.py
 # author: songyouwei <youwei0314@gmail.com>
 # Copyright (C) 2018. All Rights Reserved.
-
+import csv
 import sys
 import os
 import pickle
@@ -58,7 +58,7 @@ def build_embedding_matrix(word2idx, embed_dim, dat_fname):
     else:
         print('loading word vectors...')
         embedding_matrix = np.zeros((len(word2idx) + 2, embed_dim))  # idx 0 and len(word2idx)+1 are all-zeros
-        fname = '../dataset/embedding/glove.6B.300d.txt'
+        fname = '../datasets/embedding/glove.6B.300d.txt'
         word_vec = _load_word_vec(fname, word2idx=word2idx)
         print('building embedding_matrix:', dat_fname)
         for word, i in word2idx.items():
@@ -122,20 +122,24 @@ EVENT_TAGSET = {
 
 
 def read_token_from_file(path):
+    """
+    path：训练集、验证集、测试集
+    """
     data = []
     target_counter = collections.Counter()
-    with open(path, 'r') as f:
+    with open(path, 'r', encoding='UTF-8') as f:
         text = f.read()
+    # 两个换行表示文本段之间的分割，即文件的分割,sample_texts就是文件列表
     sample_texts = text.split('\n\n')
 
     for i, sample_text in enumerate(sample_texts):
-        sample_id = (path, i)
-        lines = [x.strip() for x in sample_text.split('\n')]
+        sample_id = (path, i)  # sample representing a sentence
+        lines = [x.strip() for x in sample_text.split('\n')]  # 文件中的句子用换行符隔开，lines是句子的集合
         lines = [x for x in lines if len(x) > 0]
         if len(lines) == 0:
             continue
-        line_parts = [x.split('\t') for x in lines if '\t' in x]
-        tokens = [x[0] for x in line_parts]
+        line_parts = [x.split('\t') for x in lines if '\t' in x]  # 句子中会划分为若干文本段
+        tokens = [x[0] for x in line_parts]  # line_parts是[line_part1,line_part2] 其中line_part1 = [token, ]
         data.append((sample_id, tokens))
     return data
 
@@ -259,7 +263,35 @@ def read_ace34_file(path):
     return data
 
 
+def del_above_100tokens(path):
+    with open(path, 'r') as f:
+        text = f.read()
+    with open(path, 'w') as f:
+        f.write('')
+    sample_texts = text.split('\n\n')
+    with open(path, 'a', newline='', encoding='utf-8') as out_file:
+        tsv_writer = csv.writer(out_file, delimiter='\t')
+        for i, sample_text in enumerate(sample_texts):
+            lines = [x.strip() for x in sample_text.split('\n')]
+            if len(lines) == 0:
+                continue
+            if len(lines) <= 100:
+                line_parts = [x.split('\t') for x in lines if '\t' in x]
+                for x in line_parts:
+                    tsv_writer.writerow([x[0], x[1]])
+                out_file.write('\n')
+    with open(path, 'r', encoding='utf-8') as in_file:
+        content = in_file.read()
+        while content.endswith('\n'):
+            content = content[:-1]
+    with open(path, 'w') as file:
+        file.write(content)
+
+
 def read_ace_file(path):
+    """
+    事件类型 Event Type
+    """
     TAGSET = {'Justice:Acquit': 33, 'Justice:Sue': 11, 'Movement:Transport': 1,
               'Life:Marry': 8, 'Justice:Convict': 24, 'Justice:Pardon': 28,
               'Other': 0, 'Justice:Arrest-Jail': 16, 'Business:Merge-Org': 30,
@@ -271,15 +303,17 @@ def read_ace_file(path):
               'Justice:Charge-Indict': 22, 'Conflict:Demonstrate': 12, 'Transaction:Transfer-Ownership': 17,
               'Justice:Trial-Hearing': 19, 'Justice:Sentence': 20, 'Life:Be-Born': 21,
               'Contact:Phone-Write': 9, 'Life:Injure': 14, 'Conflict:Attack': 5,
-              'Personnel:Elect': 2, 'O': 100}
+              'Personnel:Elect': 2, 'O': 34}
 
     data = []
+    # 每个f对应一个tsv文件 一个tsv文件就是从一个原始的sgm和apf.xml组合中获取的
     with open(path, 'r') as f:
         text = f.read()
     sample_texts = text.split('\n\n')
 
     max_len = 0
-
+    # 设想的sample_texts里面的格式 每个句子之间由换行符隔开
+    # sample_text表示一个句子 它可能是占用了几行，而且每个元素是一个列表[token, type] 每个元素以制表符隔开
     for i, sample_text in enumerate(sample_texts):
         sample_id = (path, i)
         lines = [x.strip() for x in sample_text.split('\n')]
@@ -317,6 +351,15 @@ def get_dist(i, target, adj, seen):
 
 
 def get_dist_to_target(adj, target, dist, length):
+    """
+    adj: adjacency matrix
+    target: pos of the trigger
+    dist: a list to note the distance between each word and the trigger
+    length: length of the sentence
+    return:
+        why all distances plus 1?
+        due to the word [CLS]?
+    """
     for i in range(length):
         dist[i] = get_dist(i, target, adj, [])
     assert all(d != -1 for d in dist), dist
@@ -327,9 +370,9 @@ class LitbankDataset(Dataset):
 
     def __init__(self, folder, tokenizer, features, sort=True):
         super(LitbankDataset, self).__init__()
-        self.features = features + [ 'polarity']
+        self.features = features + ['polarity'] + ['token']
         self.data = []
-        self.tokenizer = tokenizer
+        # self.tokenizer = tokenizer
         preprocessed_files = sorted([os.path.join(folder, x) for x in os.listdir(folder) if x.endswith('.proc')])
         for path in preprocessed_files:
             print('Loading preprocessed file: ', path)
@@ -358,6 +401,7 @@ class LitbankDataset(Dataset):
 
 def dont_change(x):
     return x
+
 
 tensor_type = {
     'cls_text_sep_aspect_sep_indices': torch.LongTensor,
@@ -454,7 +498,7 @@ def process_litbank_file(path):
 
         offset = 1  # Because of the CLS
         for anchor_index, (aspect_indices, target) in enumerate(zip(tok_bert_indices, targets)):
-            if sample_id[0].split('/')[3].startswith('gpt') and target== 0:
+            if sample_id[0].split('/')[3].startswith('gpt') and target == 0:
                 continue
 
             #   CLS + Sentence + SEP + aspect + SEP
@@ -623,12 +667,16 @@ def process_ace2_file(path):
 
 
 def process_ace_file(path):
+    """
+    path: train or test or dev/filename.csv
+    """
     BERT_ML = ACE_CASE['bert_ml']
     ORI_ML = ACE_CASE['ori_ml']
     MAX_TARGET_VALUE = ACE_CASE['n_class']
     tokenizer = BertTokenizer.from_pretrained(ACE_CASE['pretrained_bert_name'], do_lower_case=False)
-
+    # graph.py解读    return adjacency matrix of sentence ps:one sample_id -> one sentence
     fin = open('{}.graph'.format(path), 'rb')
+    # idx2graph eg {sample_id: adjacency matrix}
     idx2gragh = pickle.load(fin)
     fin.close()
 
@@ -657,15 +705,23 @@ def process_ace_file(path):
             for j in range(l):
                 transform[i][offset + j] = 1 / l
             offset += l
-
         dep_matrix = idx2gragh[sample_id]
 
         offset = 1  # Because of the CLS
+        count_num = 0
         for anchor_index, (aspect_indices, target) in enumerate(zip(tok_bert_indices, targets)):
-
+            # print(*zip(tok_bert_indices, targets))
+            # anchor_index 标识了事件触发器在句子中的位置
             # Discard O label (it is not Other label)
-            if target > MAX_TARGET_VALUE:
-                continue
+            # ****************************************************
+            # 尝试对所有的词进行预测，处理全部数据集！
+            # if target > MAX_TARGET_VALUE:
+            #     count_num = count_num + 1
+            # if target > MAX_TARGET_VALUE and count_num > 5:
+            #     continue
+            # if target > MAX_TARGET_VALUE:
+            #     continue
+            # ****************************************************
             #   CLS + Sentence + SEP + aspect + SEP
             cls_text_sep_aspect_sep_indices = [101] + raw_text_bert_indices + [102] + aspect_indices + [102]
             cls_text_sep_aspect_sep_length = len(cls_text_sep_aspect_sep_indices)
@@ -697,6 +753,7 @@ def process_ace_file(path):
             pad_dist_to_target = dist_to_target + dist_padding
 
             item = {
+                'token': tokens,
                 'cls_text_sep_aspect_sep_indices': cls_text_sep_aspect_sep_indices,
                 'cls_text_sep_aspect_sep_length': cls_text_sep_aspect_sep_length,
                 'cls_text_sep_aspect_sep_segments_ids': cls_text_sep_aspect_sep_segments_ids,
@@ -862,32 +919,52 @@ def preprocess_ace2_all():
     pool.map(process_ace2_file, folders)
     pool.close()
 
-
+# 终于明白什么是fucking 制表符了！
 def preprocess_ace_all():
     folders = []
-    folders += sorted([os.path.join('datasets/ace-cased/train', x) for x in os.listdir('datasets/ace-cased/train') if
+    dataset = 'ace-cased'
+    path = 'datasets/{}'.format(dataset)
+    train = os.path.join(path, 'train')
+    dev = os.path.join(path, 'dev')
+    test = os.path.join(path, 'test')
+
+    folders += sorted([os.path.join(train, x) for x in os.listdir(train) if x.endswith('tsv')])
+    folders += sorted([os.path.join(dev, x) for x in os.listdir(dev) if x.endswith('tsv')])
+    folders += sorted([os.path.join(test, x) for x in os.listdir(test) if x.endswith('tsv')])
+    pool = multiprocessing.Pool(5)
+    pool.map(process_ace_file, folders)
+    pool.close()
+    # for file in tqdm(folders, desc="processing ace..."):
+    #     process_ace_file(file)
+
+def del_ace_all():
+    folders = []
+    folders += sorted([os.path.join('datasets/ace-cased/train', x) for x in os.listdir(
+        'datasets/ace-cased/train') if
                        x.endswith('.tsv')])
     folders += sorted([os.path.join('datasets/ace-cased/dev', x) for x in os.listdir('datasets/ace-cased/dev') if
                        x.endswith('.tsv')])
     folders += sorted([os.path.join('datasets/ace-cased/test', x) for x in os.listdir('datasets/ace-cased/test') if
                        x.endswith('.tsv')])
-    pool = multiprocessing.Pool(32)
-    pool.map(process_ace_file, folders)
-    pool.close()
+
+    for file in tqdm(folders, desc="Processing files..."):
+        del_above_100tokens(file)
 
 
 def preprocess_ace34_all():
     folders = []
-    base = 'datasets/ace34-uncased'
+    base = 'datasets/ace-cased'
     train = os.path.join(base, 'train')
     dev = os.path.join(base, 'dev')
     test = os.path.join(base, 'test')
     folders += sorted([os.path.join(train, x) for x in os.listdir(train) if x.endswith('.tsv')])
     folders += sorted([os.path.join(dev, x) for x in os.listdir(dev) if x.endswith('.tsv')])
     folders += sorted([os.path.join(test, x) for x in os.listdir(test) if x.endswith('.tsv')])
-    pool = multiprocessing.Pool(32)
-    pool.map(process_ace34_file, folders)
-    pool.close()
+    # pool = multiprocessing.Pool(32)
+    # pool.map(process_ace34_file, folders)
+    # pool.close()
+    for file in tqdm(folders, desc="processing ace..."):
+        process_ace34_file(file)
 
 
 def analyze_length():
@@ -928,18 +1005,35 @@ def test_dataset():
 
 
 if __name__ == '__main__':
+    preprocess_ace_all()
+    # process_ace_file("datasets/ace-cased/train/AFP_ENG_20030323.0020.tsv")
     # read_litbank_file('')
     #
     # preprocess_ace2_all()
-    # preprocess_ace_all()
+
     # preprocess_litbank_all()
     # preprocess_ace34_all()
-
-    files=['datasets/litbank-cased/train/gpt-{}.tsv'.format(i) for i in range(14)]
-
-    p = multiprocessing.Pool(15)
-    p.map(process_litbank_file, files)
-
+    # del_ace_all()
+    # files = ['datasets/litbank-cased/train/gpt-{}.tsv'.format(i) for i in range(14)]
+    #
+    # p = multiprocessing.Pool(15)
+    # p.map(process_litbank_file, files)
+    # file1_path = "datasets/ace-cased/train/fsh_29187.tsv"
+    # file2_path = "fsh_29187.tsv"
+    # #
+    # # 读取第一个文件的内容
+    # with open(file1_path, 'r') as file1:
+    #     file1_content = file1.read()
+    #
+    # # 读取第二个文件的内容
+    # with open(file2_path, 'r') as file2:
+    #     file2_content = file2.read()
+    #
+    # # 比较两个文件内容是否相同
+    # if file1_content == file2_content:
+    #     print("两个文件内容完全相同。")
+    # else:
+    #     print("两个文件内容不完全相同。")
     # test_dataset()
     # process_a_file('datasets/litbank/train/730_oliver_twist_brat.tsv')
     # process_a_file('datasets/litbank/train/8867_the_magnificent_ambersons_brat.tsv')
