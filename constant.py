@@ -262,7 +262,7 @@ ACE_CASE = {
     'dev': 'datasets/ace-cased/dev',
     'test': 'datasets/ace-cased/test',
     'pretrained_bert_name': 'bert-base-cased',
-    'n_class': 34,
+    'n_class': 35,
     'bert_ml': 300,
     'ori_ml': 231
 }
