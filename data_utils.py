@@ -923,7 +923,7 @@ def preprocess_ace2_all():
 def preprocess_ace_all():
     folders = []
     dataset = 'ace-cased'
-    path = 'datasets/{}'.format(dataset)
+    path = '/content/drive/MyDrive/ACE2005/{}'.format(dataset)
     train = os.path.join(path, 'train')
     dev = os.path.join(path, 'dev')
     test = os.path.join(path, 'test')
