@@ -258,9 +258,9 @@ ACE2_UNCASE = {
 }
 
 ACE_CASE = {
-    'train': 'datasets/ace-cased/train',
-    'dev': 'datasets/ace-cased/dev',
-    'test': 'datasets/ace-cased/test',
+    'train': '/content/drive/MyDrive/ACE2005/ace-cased/train',
+    'dev': '/content/drive/MyDrive/ACE2005/ace-cased/dev',
+    'test': '/content/drive/MyDrive/ACE2005/ace-cased/test',
     'pretrained_bert_name': 'bert-base-cased',
     'n_class': 35,
     'bert_ml': 300,
