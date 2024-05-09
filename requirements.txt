@@ -1,5 +1,3 @@
 pytorch
 sklearn
-nltk
 tqdm
-stanza
