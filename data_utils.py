@@ -696,8 +696,8 @@ def process_ace_file(path):
     
         new_tuple_key = (new_key, temp_num)
 
-    # 更新字典中的键值对
-    idx2gragh[new_tuple_key] = idx2gragh.pop(old_tuple_key)
+        # 更新字典中的键值对
+        idx2gragh[new_tuple_key] = idx2gragh.pop(old_tuple_key)
 
     raw_data = read_ace_file(path)
     data = []
