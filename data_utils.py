@@ -950,7 +950,7 @@ def preprocess_ace_all():
     folders += sorted([os.path.join(train, x) for x in os.listdir(train) if x.endswith('tsv')])
     folders += sorted([os.path.join(dev, x) for x in os.listdir(dev) if x.endswith('tsv')])
     folders += sorted([os.path.join(test, x) for x in os.listdir(test) if x.endswith('tsv')])
-    pool = multiprocessing.Pool(5)
+    pool = multiprocessing.Pool(32)
     pool.map(process_ace_file, folders)
     pool.close()
     # for file in tqdm(folders, desc="processing ace..."):
